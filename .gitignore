@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Sensitive data
+cookies.json
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Nested git history
+tradingview-api-reference/.git/

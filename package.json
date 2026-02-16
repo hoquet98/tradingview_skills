@@ -1,0 +1,15 @@
+{
+  "name": "tradingview-skills",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js",
+    "convert-cookies": "node scripts/convert-cookies.js"
+  },
+  "keywords": ["tradingview", "playwright", "automation"],
+  "license": "ISC",
+  "description": "TradingView automation library using Playwright",
+  "dependencies": {
+    "playwright": "^1.58.2"
+  }
+}
