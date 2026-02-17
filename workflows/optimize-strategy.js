@@ -12,6 +12,48 @@ const { getClient, getCredentials, TradingView, close } = require('../lib/ws-cli
 const { getIndicatorDetails } = require('../skills/get-indicator-details');
 
 /**
+ * Build a map from human-readable input names to their in_XX IDs.
+ * Allows users to pass {"Stop Ticks": 50} instead of {"in_20": 50}.
+ * @param {Object} inputs - The indicator's inputs object (keyed by in_XX)
+ * @returns {Object<string, string>} Map of name → in_XX id
+ */
+function buildNameToIdMap(inputs) {
+  const map = {};
+  for (const [id, input] of Object.entries(inputs)) {
+    if (input.name) {
+      map[input.name] = id;
+      // Also map trimmed version (some names have leading spaces like "  Sunday")
+      map[input.name.trim()] = id;
+    }
+  }
+  return map;
+}
+
+/**
+ * Resolve parameter keys from human-readable names to in_XX IDs.
+ * Accepts either format: {"Stop Ticks": 50} or {"in_20": 50}.
+ * @param {Object} params - Parameters with name or ID keys
+ * @param {Object<string, string>} nameToId - Name-to-ID map from buildNameToIdMap
+ * @returns {Object} Parameters with in_XX keys
+ */
+function resolveParamIds(params, nameToId) {
+  const resolved = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (key.startsWith('in_')) {
+      // Already an ID
+      resolved[key] = value;
+    } else if (nameToId[key]) {
+      resolved[nameToId[key]] = value;
+    } else if (nameToId[key.trim()]) {
+      resolved[nameToId[key.trim()]] = value;
+    } else {
+      throw new Error(`Unknown parameter "${key}". Use get-indicator-details to list available parameters.`);
+    }
+  }
+  return resolved;
+}
+
+/**
  * Generate all combinations from parameter ranges.
  * @param {Object<string, any[]>} ranges - { "Param Name": [val1, val2, ...], ... }
  * @returns {Object[]} Array of param combinations
@@ -40,6 +82,12 @@ function generateCombinations(ranges) {
 
 /**
  * Run a single backtest with specific parameters.
+ * @param {string} scriptId - Script ID
+ * @param {Object} indicator - Indicator template (unused, kept for compat)
+ * @param {string} symbol - Market symbol
+ * @param {string} timeframe - Timeframe
+ * @param {Object} params - Parameters with in_XX keys (already resolved)
+ * @param {number} range - Bar range
  */
 async function runSingleBacktest(scriptId, indicator, symbol, timeframe, params, range) {
   const { session, signature } = getCredentials();
@@ -48,7 +96,7 @@ async function runSingleBacktest(scriptId, indicator, symbol, timeframe, params,
   const ind = await TradingView.getIndicator(scriptId, 'last', session, signature);
   ind.setType('StrategyScript@tv-scripting-101!');
 
-  // Apply parameters
+  // Apply parameters (must use in_XX keys — use resolveParamIds() before calling this)
   for (const [key, value] of Object.entries(params)) {
     ind.setOption(key, value);
   }
@@ -135,9 +183,10 @@ async function optimizeStrategy(scriptId, options = {}) {
     return { success: false, message: 'Parameter ranges required. Format: {"Param Name": [val1, val2, ...]}' };
   }
 
-  // 1. Get indicator details for context
+  // 1. Get indicator details and build name→ID map
   let strategyName = scriptId;
   let defaults = {};
+  let nameToId = {};
   try {
     const details = await getIndicatorDetails(scriptId);
     if (details.success) {
@@ -150,16 +199,29 @@ async function optimizeStrategy(scriptId, options = {}) {
     // Continue with scriptId as name
   }
 
-  // 2. Generate all parameter combinations
-  const combinations = generateCombinations(paramRanges);
-
-  // 3. Load indicator template
+  // 2. Load indicator template and build name→ID map for param resolution
   const { session, signature } = getCredentials();
   let indicator;
   try {
     indicator = await TradingView.getIndicator(scriptId, 'last', session, signature);
+    nameToId = buildNameToIdMap(indicator.inputs);
   } catch (error) {
     return { success: false, message: 'Failed to load script', error: error.message };
+  }
+
+  // 3. Resolve parameter names to in_XX IDs and generate combinations
+  let resolvedRanges;
+  try {
+    resolvedRanges = resolveParamIds(paramRanges, nameToId);
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+  const combinations = generateCombinations(resolvedRanges);
+
+  // Also build a reverse map (in_XX → name) for readable output
+  const idToName = {};
+  for (const [name, id] of Object.entries(nameToId)) {
+    if (!idToName[id]) idToName[id] = name;
   }
 
   // 4. Run backtests sequentially (WS sessions share a single client)
@@ -168,6 +230,11 @@ async function optimizeStrategy(scriptId, options = {}) {
     const combo = combinations[i];
     try {
       const result = await runSingleBacktest(scriptId, indicator, symbol, timeframe, combo, range);
+      // Add human-readable param names to the result
+      result.paramsNamed = {};
+      for (const [id, val] of Object.entries(result.params)) {
+        result.paramsNamed[idToName[id] || id] = val;
+      }
       results.push(result);
     } catch (error) {
       results.push({ params: combo, error: error.message });
@@ -226,5 +293,5 @@ async function main() {
   }
 }
 
-module.exports = { optimizeStrategy };
+module.exports = { optimizeStrategy, buildNameToIdMap, resolveParamIds };
 if (require.main === module) main();
