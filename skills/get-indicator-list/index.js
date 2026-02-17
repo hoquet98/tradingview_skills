@@ -9,10 +9,16 @@ const { TradingView } = require('../../lib/ws-client');
  * @param {Page|string} [pageOrQuery] - Playwright page or search query string
  * @returns {Promise<{success:boolean, indicators?:Array, count?:number}>}
  */
-async function getIndicatorList(pageOrQuery) {
+async function getIndicatorList(pageOrQuery, section) {
+  // Dialog browsing mode: page + section → list all items in that section
+  if (pageOrQuery && typeof pageOrQuery.evaluate === 'function' && section) {
+    return getIndicatorsFromSection(pageOrQuery, section);
+  }
+  // Playwright legend mode: page only → list indicators on the chart
   if (pageOrQuery && typeof pageOrQuery.evaluate === 'function') {
     return getIndicatorListPlaywright(pageOrQuery);
   }
+  // API mode: string → search TradingView HTTP API
   return getIndicatorListAPI(pageOrQuery || '');
 }
 
@@ -83,6 +89,8 @@ async function getIndicatorListPlaywright(page) {
  * Reused by addIndicator and addFavoriteIndicator.
  */
 async function openIndicatorsDialog(page) {
+  // Wait for toolbar to be ready (may take a moment after chart loads)
+  await page.waitForSelector('#header-toolbar-indicators button[data-name="open-indicators-dialog"]', { timeout: 10000 }).catch(() => {});
   const indicatorsBtn = page.locator('#header-toolbar-indicators button[data-name="open-indicators-dialog"]').first();
   if (!(await indicatorsBtn.count())) {
     return { success: false, message: 'Indicators button not found' };
@@ -99,6 +107,106 @@ async function openIndicatorsDialog(page) {
 async function closeIndicatorsDialog(page) {
   const closeBtn = await page.$('[data-name="indicators-dialog"] [data-qa-id="close"]');
   if (closeBtn) await closeBtn.click();
+}
+
+/**
+ * Browse a section of the indicators dialog and return all items.
+ * Handles the virtualized list by scrolling and collecting items at each position.
+ *
+ * @param {object} page - Playwright page
+ * @param {string} section - Sidebar section key (e.g. 'favorites', 'my-scripts', 'editors-picks', 'top')
+ * @returns {Promise<{success:boolean, indicators?:Array<{name:string, id:string}>, count?:number, section:string}>}
+ */
+async function getIndicatorsFromSection(page, section = 'favorites') {
+  try {
+    const sidebarQaId = SIDEBAR_SECTIONS[section];
+    if (!sidebarQaId) {
+      return {
+        success: false,
+        message: `Unknown section "${section}". Valid: ${Object.keys(SIDEBAR_SECTIONS).join(', ')}`,
+        section,
+      };
+    }
+
+    const openResult = await openIndicatorsDialog(page);
+    if (!openResult.success) return { ...openResult, section };
+
+    // Navigate to the sidebar section
+    const sidebarItem = await page.$(`[data-qa-id="${sidebarQaId}"]`);
+    if (!sidebarItem) {
+      await closeIndicatorsDialog(page);
+      return { success: false, message: `Sidebar section "${section}" not found in dialog`, section };
+    }
+    await sidebarItem.click();
+    await page.waitForTimeout(800);
+
+    // Collect all items by scrolling through the virtualized list.
+    // The dialog uses a virtualized list where only ~18 items are rendered in the DOM
+    // at any time. The scrollable container has class "scroll-*" inside the dialog.
+    const collected = new Map();
+    let noNewItemsCount = 0;
+
+    for (let i = 0; i < 500; i++) { // Safety limit: max 500 scroll iterations
+      // Grab currently visible items
+      const visibleItems = await page.evaluate(() => {
+        const items = document.querySelectorAll('[data-name="indicators-dialog"] [data-role="list-item"]');
+        return Array.from(items).map(el => ({
+          name: el.getAttribute('data-title') || '',
+          id: el.getAttribute('data-id') || '',
+        })).filter(item => item.name && item.id);
+      });
+
+      const prevSize = collected.size;
+      for (const item of visibleItems) {
+        collected.set(item.id, item.name);
+      }
+
+      // If no new items were found, we may have reached the end
+      if (collected.size === prevSize) {
+        noNewItemsCount++;
+        if (noNewItemsCount >= 3) break; // 3 consecutive scrolls with no new items → done
+      } else {
+        noNewItemsCount = 0;
+      }
+
+      // Scroll down — the scrollable container is listContainer-* inside the dialog
+      const scrolled = await page.evaluate(() => {
+        const dialog = document.querySelector('[data-name="indicators-dialog"]');
+        if (!dialog) return false;
+        // Primary: listContainer element (the actual scrollable area)
+        let container = dialog.querySelector('[class*="listContainer"]');
+        // Fallback: find any element with scrollHeight > clientHeight
+        if (!container || container.scrollHeight <= container.clientHeight) {
+          const candidates = dialog.querySelectorAll('*');
+          for (const c of candidates) {
+            if (c.scrollHeight > c.clientHeight + 10 && c.querySelectorAll('[data-role="list-item"]').length > 0) {
+              container = c;
+              break;
+            }
+          }
+        }
+        if (!container) return false;
+        container.scrollTop += 400;
+        return true;
+      });
+
+      if (!scrolled) break;
+      await page.waitForTimeout(150);
+    }
+
+    await closeIndicatorsDialog(page);
+
+    const indicators = Array.from(collected.entries()).map(([id, name]) => ({ name, id }));
+    return {
+      success: true,
+      indicators,
+      count: indicators.length,
+      section,
+    };
+  } catch (error) {
+    try { await closeIndicatorsDialog(page); } catch (_) {}
+    return { success: false, message: 'Error browsing section', error: error.message, section };
+  }
 }
 
 async function addIndicator(page, indicatorName = 'SMA') {
@@ -448,7 +556,8 @@ async function main() {
       case 'remove': result = await removeIndicator(page, name); break;
       case 'get-settings': result = await getIndicatorSettings(page, name); break;
       case 'set-settings': result = await setIndicatorSettings(page, name, settings); break;
-      default: result = { success: false, message: 'Usage: search|list|add|remove|get-settings|set-settings <name> [settings]' };
+      case 'browse': result = await getIndicatorsFromSection(page, name || 'favorites'); break;
+      default: result = { success: false, message: 'Usage: search|list|add|remove|get-settings|set-settings|browse <name> [settings]' };
     }
 
     console.log(JSON.stringify(result, null, 2));
@@ -457,5 +566,5 @@ async function main() {
   }
 }
 
-module.exports = { getIndicatorList, addIndicator, addIndicatorFromSection, addFavoriteIndicator, removeIndicator, getIndicatorSettings, setIndicatorSettings };
+module.exports = { getIndicatorList, getIndicatorsFromSection, addIndicator, addIndicatorFromSection, addFavoriteIndicator, removeIndicator, getIndicatorSettings, setIndicatorSettings };
 if (require.main === module) main();

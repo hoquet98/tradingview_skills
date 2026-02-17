@@ -30,11 +30,12 @@ const { addToWatchlist } = require('./skills/add-to-watchlist');
 const { deleteWatchlist } = require('./skills/delete-watchlist');
 
 // Indicators
-const { getIndicatorList, addIndicator, removeIndicator, getIndicatorSettings, setIndicatorSettings } = require('./skills/get-indicator-list');
+const { getIndicatorList, getIndicatorsFromSection, addIndicator, removeIndicator, getIndicatorSettings, setIndicatorSettings } = require('./skills/get-indicator-list');
 
 // Alerts
 const { createAlert } = require('./skills/create-alert');
 const { viewAlert, listAlerts, editAlert, deleteAlert } = require('./skills/view-alert');
+const { getAlertLog } = require('./skills/get-alert-log');
 
 // Drawings & Scripts
 const { getDrawingList, addDrawing, removeDrawing, setDrawingProperties } = require('./skills/get-drawing-list');
@@ -92,6 +93,7 @@ module.exports = {
 
   // Indicators
   getIndicatorList,
+  getIndicatorsFromSection,
   addIndicator,
   removeIndicator,
   getIndicatorSettings,
@@ -103,6 +105,7 @@ module.exports = {
   listAlerts,
   editAlert,
   deleteAlert,
+  getAlertLog,
 
   // Drawings & Scripts
   getDrawingList,
