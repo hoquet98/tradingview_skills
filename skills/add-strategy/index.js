@@ -105,7 +105,7 @@ async function addStrategy(page, strategyName = 'SMA Crossover') {
 
 async function main() {
   const strategyName = process.argv[2] || 'SMA Crossover';
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

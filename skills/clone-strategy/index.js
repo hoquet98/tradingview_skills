@@ -115,7 +115,7 @@ async function main() {
   const action = process.argv[2] || 'clone';
   const source = process.argv[3];
   const target = process.argv[4];
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

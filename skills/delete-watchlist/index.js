@@ -59,7 +59,7 @@ async function deleteWatchlist(page, name) {
 
 async function main() {
   const name = process.argv[2];
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

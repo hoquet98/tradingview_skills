@@ -56,7 +56,7 @@ async function getWatchlistSymbols(page, watchlistName = null) {
 
 async function main() {
   const watchlistName = process.argv[2] || null;
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

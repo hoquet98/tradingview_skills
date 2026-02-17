@@ -191,7 +191,7 @@ function parseDateLabel(dateLabel, timeStr) {
 
 async function main() {
   const days = parseInt(process.argv[2]) || 1;
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

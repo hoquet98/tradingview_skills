@@ -93,7 +93,7 @@ async function createAlert(page, options = {}) {
 
 async function main() {
   const options = process.argv[2] ? JSON.parse(process.argv[2]) : {};
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

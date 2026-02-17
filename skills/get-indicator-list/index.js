@@ -545,7 +545,7 @@ async function main() {
   }
 
   // All other actions require Playwright
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

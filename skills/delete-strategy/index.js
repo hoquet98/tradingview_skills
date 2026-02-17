@@ -55,7 +55,7 @@ async function deleteStrategy(page, name = null) {
 
 async function main() {
   const name = process.argv[2] || null;
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

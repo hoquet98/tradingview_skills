@@ -161,7 +161,7 @@ async function takeScreenshot(page, options = {}) {
 async function main() {
   const action = process.argv[2];
   const param = process.argv[3];
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

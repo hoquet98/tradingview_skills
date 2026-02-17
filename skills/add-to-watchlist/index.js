@@ -63,7 +63,7 @@ async function addToWatchlist(page, symbol = 'NASDAQ:AAPL', watchlistName = null
 async function main() {
   const symbol = process.argv[2] || 'NASDAQ:AAPL';
   const watchlistName = process.argv[3] || null;
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

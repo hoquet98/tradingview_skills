@@ -31,7 +31,7 @@ async function getActiveStrategy(page) {
 }
 
 async function main() {
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

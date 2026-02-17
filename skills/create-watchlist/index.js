@@ -70,7 +70,7 @@ async function createWatchlist(page, name = 'My Watchlist') {
 
 async function main() {
   const name = process.argv[2] || 'My Watchlist';
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

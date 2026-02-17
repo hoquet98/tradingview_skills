@@ -59,7 +59,7 @@ async function renameStrategy(page, oldName, newName) {
 async function main() {
   const oldName = process.argv[2];
   const newName = process.argv[3];
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

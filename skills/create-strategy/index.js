@@ -73,7 +73,7 @@ async function main() {
     source = fs.readFileSync(sourceFile, 'utf-8');
   }
 
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

@@ -81,7 +81,7 @@ async function main() {
   const param = process.argv[3];
   const options = process.argv[4] ? JSON.parse(process.argv[4]) : {};
 
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);

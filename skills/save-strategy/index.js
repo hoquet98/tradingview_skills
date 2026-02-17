@@ -54,7 +54,7 @@ async function saveStrategy(page, strategyName = null) {
 
 async function main() {
   const strategyName = process.argv[2] || null;
-  const { browser, page } = await launchBrowser({ headless: false });
+  const { browser, page } = await launchBrowser();
 
   try {
     await openChart(page);
