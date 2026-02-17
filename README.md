@@ -1,6 +1,6 @@
 # TradingView Skills
 
-A Node.js automation library for TradingView. 33 skills that cover chart operations, strategy management, indicators, alerts, watchlists, market data, and more.
+A Node.js automation library for TradingView. 35 skills that cover chart operations, strategy management, indicators, alerts, watchlists, market data, and more.
 
 Skills run via **WebSocket** (fast, headless) or **Playwright** (browser automation) depending on the operation. Callers don't need to know which transport is used — the library picks the best one automatically.
 
@@ -121,9 +121,10 @@ These skills automate the TradingView UI. They require a browser session.
 | [clone-strategy](docs/skills-reference.md#clone-strategy) | Copy/paste strategy settings |
 | [open-strategy-settings](docs/skills-reference.md#open-strategy-settings) | Read strategy parameters |
 | [get-active-strategy](docs/skills-reference.md#get-active-strategy) | List strategies on chart |
-| [get-indicator-list](docs/skills-reference.md#get-indicator-list) | Add/remove/configure indicators |
+| [get-indicator-list](docs/skills-reference.md#get-indicator-list) | Add/remove/configure/browse indicators |
 | [create-alert](docs/skills-reference.md#create-alert) | Create price alerts |
 | [view-alert](docs/skills-reference.md#view-alert) | View/list/edit/delete alerts |
+| [get-alert-log](docs/skills-reference.md#get-alert-log) | Alert firing history by days |
 | [get-watchlist-symbols](docs/skills-reference.md#get-watchlist-symbols) | Read watchlist symbols |
 | [create-watchlist](docs/skills-reference.md#create-watchlist) | Create a watchlist |
 | [add-to-watchlist](docs/skills-reference.md#add-to-watchlist) | Add symbol to watchlist |
@@ -160,14 +161,14 @@ See [docs/workflows.md](docs/workflows.md) for full details and module usage.
 
 ## Documentation
 
-- **[Skills Reference](docs/skills-reference.md)** — Complete API reference for all 33 skills with parameters, return types, and examples
+- **[Skills Reference](docs/skills-reference.md)** — Complete API reference for all 35 skills with parameters, return types, and examples
 - **[Workflows](docs/workflows.md)** — 12 runnable workflow scripts with CLI and module usage
 
 ## Project Structure
 
 ```
 TradingView Skills/
-  index.js                  # Master export (59 functions)
+  index.js                  # Master export (65 functions)
   cookies.json              # Playwright-format cookies (generated)
   www.tradingview.com_cookies.json  # Raw GetCookies export (user drops here)
   package.json
@@ -180,7 +181,7 @@ TradingView Skills/
   skills/
     get-chart-data/         # Each skill is a directory with index.js
     get-quote/
-    ...33 total
+    ...35 total
   workflows/
     market-research.js      # Search + quote + TA + metadata
     strategy-backtest.js    # Multi-symbol/timeframe backtesting

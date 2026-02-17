@@ -1,6 +1,6 @@
 # Skills Reference
 
-Complete API reference for all 33 TradingView skills. Each skill can be used as a library function or run from the command line.
+Complete API reference for all 35 TradingView skills. Each skill can be used as a library function or run from the command line.
 
 **Transport key:**
 - **WS** = WebSocket (fast, headless)
@@ -46,6 +46,7 @@ Complete API reference for all 33 TradingView skills. Each skill can be used as 
 ### Alerts
 - [create-alert](#create-alert) — Create price alert
 - [view-alert](#view-alert) — View, list, edit, delete alerts
+- [get-alert-log](#get-alert-log) — Alert firing history by days
 
 ### Watchlists
 - [get-watchlist-symbols](#get-watchlist-symbols) — Read watchlist symbols
@@ -806,14 +807,15 @@ node skills/clone-strategy/index.js clone "Source Strategy" "Target Strategy"
 
 ### get-indicator-list
 
-Search indicators via HTTP API, or add/remove/configure indicators via Playwright.
+Search indicators via HTTP API, browse indicator dialog sections, or add/remove/configure indicators via Playwright.
 
-**Transport:** Hybrid (HTTP for search, PW for add/remove/settings)
+**Transport:** Hybrid (HTTP for search, PW for browse/add/remove/settings)
 
 #### Function Signatures
 
 ```js
-getIndicatorList(pageOrQuery)                           // Search (HTTP) or list chart indicators (PW)
+getIndicatorList(pageOrQuery, section?)                 // Search (HTTP), list chart indicators (PW), or browse section (PW)
+getIndicatorsFromSection(page, section?)                // Browse a dialog section and list all items (PW)
 addIndicator(page, indicatorName?)                      // Add indicator to chart (PW)
 addIndicatorFromSection(page, indicatorName, section?)  // Add from specific section (PW)
 addFavoriteIndicator(page, indicatorName)               // Add from favorites (PW)
@@ -841,10 +843,28 @@ setIndicatorSettings(page, indicatorName?, settings?)   // Write settings (PW)
 }
 ```
 
+#### Returns (browse section mode)
+
+```json
+{
+  "success": true,
+  "indicators": [
+    { "name": "Relative Strength Index", "id": "STD;RSI" },
+    { "name": "MACD", "id": "STD;MACD" }
+  ],
+  "count": 120,
+  "section": "top"
+}
+```
+
 #### CLI
 
 ```bash
 node skills/get-indicator-list/index.js search RSI
+node skills/get-indicator-list/index.js browse favorites
+node skills/get-indicator-list/index.js browse my-scripts
+node skills/get-indicator-list/index.js browse editors-picks
+node skills/get-indicator-list/index.js browse top
 node skills/get-indicator-list/index.js add "MACD"
 node skills/get-indicator-list/index.js remove "Volume"
 node skills/get-indicator-list/index.js get-settings "RSI"
@@ -970,32 +990,110 @@ node skills/create-alert/index.js '{"symbol":"NASDAQ:AAPL","condition":"Crosses 
 
 ### view-alert
 
-View, list, edit, or delete alerts.
+View, list, edit, or delete alerts. Opens the alerts panel in the right sidebar and scrapes alert data from the virtualized list.
 
 **Transport:** PW
 
 #### Function Signatures
 
 ```js
-viewAlert(page, alertId?)
-listAlerts(page)
-editAlert(page, alertId, options?)
-deleteAlert(page, alertId?)
+openAlertsPanel(page)              // Open the alerts sidebar panel
+listAlerts(page)                   // List all alerts (scrolls through virtualized list)
+viewAlert(page, alertName?)        // View a specific alert by name (partial match)
+editAlert(page, alertName)         // Open edit dialog for an alert
+deleteAlert(page, alertName?)      // Delete an alert (with confirmation)
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `page` | `Page` | — | Playwright Page |
-| `alertId` | `string \| null` | `null` | Alert ID |
-| `options` | `object` | `{}` | Fields to update |
+| `alertName` | `string \| null` | `null` | Alert name (partial match, case-insensitive). First alert if null. |
+
+#### Returns (listAlerts)
+
+```json
+{
+  "success": true,
+  "alerts": [
+    {
+      "name": "ES Crossing Up 5900",
+      "description": "Webhook payload text",
+      "ticker": "ES1!, 1m",
+      "status": "Active",
+      "time": "Mon 16 Feb '26 05:52:01 AM",
+      "isActive": true,
+      "canPause": true,
+      "canRestart": false
+    }
+  ],
+  "count": 5
+}
+```
+
+#### Returns (viewAlert)
+
+```json
+{
+  "success": true,
+  "alert": { "name": "ES Crossing Up 5900", "ticker": "ES1!, 1m", "status": "Active", "time": "..." },
+  "message": "Alert \"ES Crossing Up 5900\" found"
+}
+```
 
 #### CLI
 
 ```bash
 node skills/view-alert/index.js list
-node skills/view-alert/index.js view <alertId>
-node skills/view-alert/index.js edit <alertId>
-node skills/view-alert/index.js delete <alertId>
+node skills/view-alert/index.js view "ES Crossing"
+node skills/view-alert/index.js edit "ES Crossing"
+node skills/view-alert/index.js delete "ES Crossing"
+```
+
+---
+
+### get-alert-log
+
+Get alert firing history from the Log tab. Scrolls through log entries and filters by number of days.
+
+**Transport:** PW
+
+#### Function Signature
+
+```js
+getAlertLog(page, days?)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page` | `Page` | — | Playwright Page |
+| `days` | `number` | `1` | Number of days to include. `1` = today only, `2` = today + yesterday, `7` = last week, etc. |
+
+#### Returns
+
+```json
+{
+  "success": true,
+  "logs": [
+    {
+      "name": "ES Crossing Up 5900",
+      "message": "{{ticker}} crossed above {{price}}",
+      "ticker": "ES1!",
+      "time": "05:52:01 AM",
+      "date": "February 16",
+      "triggeredAt": "2026-02-16T05:52:01.000Z"
+    }
+  ],
+  "count": 12,
+  "days": 1
+}
+```
+
+#### CLI
+
+```bash
+node skills/get-alert-log/index.js 1        # Today's logs only
+node skills/get-alert-log/index.js 7        # Last 7 days
+node skills/get-alert-log/index.js 30       # Last 30 days
 ```
 
 ---
