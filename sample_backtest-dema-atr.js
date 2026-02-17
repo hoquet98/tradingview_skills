@@ -69,7 +69,7 @@ async function runSingleBacktest(scriptId, symbol, timeframe, params, range) {
           totalTrades: perf.totalTrades,
           percentProfitable: perf.percentProfitable,
           profitFactor: perf.profitFactor,
-          maxDrawdown: report.performance?.maxDrawDown,
+          maxDrawdown: report.performance?.maxStrategyDrawDown,
           avgTrade: perf.avgTrade,
         });
       }
