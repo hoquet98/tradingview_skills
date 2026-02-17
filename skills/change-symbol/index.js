@@ -1,6 +1,34 @@
-const { launchBrowser, openChart, closeBrowser } = require('../../lib/browser');
+const { fetchChartData, close } = require('../../lib/ws-client');
 
-async function changeSymbol(page, symbol = 'NASDAQ:AAPL') {
+/**
+ * Change the chart symbol.
+ * - WebSocket mode (default): pass symbol string, verifies by fetching data
+ * - Playwright mode (backward compat): pass a Playwright page as first arg
+ *
+ * @param {Page|string} pageOrSymbol - Playwright page or symbol string (e.g. 'NASDAQ:AAPL')
+ * @param {string} [symbol] - Symbol when first arg is a page
+ * @returns {Promise<{success:boolean, message:string, symbol?:string}>}
+ */
+async function changeSymbol(pageOrSymbol, symbol) {
+  if (pageOrSymbol && typeof pageOrSymbol.evaluate === 'function') {
+    return changeSymbolPlaywright(pageOrSymbol, symbol || 'NASDAQ:AAPL');
+  }
+  return changeSymbolWS(pageOrSymbol || 'NASDAQ:AAPL');
+}
+
+async function changeSymbolWS(symbol) {
+  try {
+    const data = await fetchChartData(symbol, { timeframe: 'D', range: 1 });
+    if (data.length > 0) {
+      return { success: true, message: `Symbol changed to ${symbol}`, symbol };
+    }
+    return { success: false, message: `No data for symbol ${symbol}`, symbol };
+  } catch (error) {
+    return { success: false, message: 'Error changing symbol', error: error.message };
+  }
+}
+
+async function changeSymbolPlaywright(page, symbol = 'NASDAQ:AAPL') {
   try {
     const symbolButton = await page.$('#header-toolbar-symbol-search');
     if (!symbolButton) {
@@ -44,16 +72,14 @@ async function changeSymbol(page, symbol = 'NASDAQ:AAPL') {
 
 async function main() {
   const symbol = process.argv[2] || 'NASDAQ:AAPL';
-  const { browser, page } = await launchBrowser({ headless: false });
 
   try {
-    await openChart(page);
-    const result = await changeSymbol(page, symbol);
+    const result = await changeSymbol(symbol);
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {
     console.log(JSON.stringify({ success: false, message: 'Unexpected error', error: error.message }, null, 2));
   } finally {
-    await closeBrowser(browser);
+    await close();
   }
 }
 

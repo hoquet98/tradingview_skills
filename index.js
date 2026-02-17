@@ -40,6 +40,21 @@ const { viewAlert, listAlerts, editAlert, deleteAlert } = require('./skills/view
 const { getDrawingList, addDrawing, removeDrawing, setDrawingProperties } = require('./skills/get-drawing-list');
 const { getSavedScripts } = require('./skills/get-saved-scripts');
 
+// WebSocket/HTTP API Skills (no browser needed)
+const { getTechnicalAnalysis } = require('./skills/get-technical-analysis');
+const { searchMarket } = require('./skills/search-market');
+const { getQuote } = require('./skills/get-quote');
+const { getIndicatorDetails } = require('./skills/get-indicator-details');
+const { getMarketInfo } = require('./skills/get-market-info');
+const { replayChart } = require('./skills/replay-chart');
+const { fetchMoreData } = require('./skills/fetch-more-data');
+const { managePinePermissions } = require('./skills/manage-pine-permissions');
+const { getUserInfo } = require('./skills/get-user-info');
+const { getChartDrawings } = require('./skills/get-chart-drawings');
+
+// Study Limits
+const { getUserStudyLimits, countStudiesOnChart, checkStudyCapacity } = require('./lib/study-limits');
+
 module.exports = {
   // Core
   ...browser,
@@ -95,4 +110,21 @@ module.exports = {
   removeDrawing,
   setDrawingProperties,
   getSavedScripts,
+
+  // WebSocket/HTTP API Skills
+  getTechnicalAnalysis,
+  searchMarket,
+  getQuote,
+  getIndicatorDetails,
+  getMarketInfo,
+  replayChart,
+  fetchMoreData,
+  managePinePermissions,
+  getUserInfo,
+  getChartDrawings,
+
+  // Study Limits
+  getUserStudyLimits,
+  countStudiesOnChart,
+  checkStudyCapacity,
 };

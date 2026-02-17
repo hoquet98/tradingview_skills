@@ -6,10 +6,17 @@
     "test": "node test.js",
     "convert-cookies": "node scripts/convert-cookies.js"
   },
-  "keywords": ["tradingview", "playwright", "automation"],
+  "keywords": [
+    "tradingview",
+    "playwright",
+    "automation"
+  ],
   "license": "ISC",
   "description": "TradingView automation library using Playwright",
   "dependencies": {
-    "playwright": "^1.58.2"
+    "axios": "^1.13.5",
+    "jszip": "^3.10.1",
+    "playwright": "^1.58.2",
+    "ws": "^8.19.0"
   }
 }

@@ -1,12 +1,45 @@
 const { launchBrowser, openChart, closeBrowser } = require('../../lib/browser');
+const { TradingView } = require('../../lib/ws-client');
 
-async function getIndicatorList(page) {
+/**
+ * Get/search indicators.
+ * - HTTP API mode (default): pass search query string as first arg
+ * - Playwright mode (backward compat): pass a Playwright page to get chart legend indicators
+ *
+ * @param {Page|string} [pageOrQuery] - Playwright page or search query string
+ * @returns {Promise<{success:boolean, indicators?:Array, count?:number}>}
+ */
+async function getIndicatorList(pageOrQuery) {
+  if (pageOrQuery && typeof pageOrQuery.evaluate === 'function') {
+    return getIndicatorListPlaywright(pageOrQuery);
+  }
+  return getIndicatorListAPI(pageOrQuery || '');
+}
+
+async function getIndicatorListAPI(query = '') {
   try {
-    // Wait for chart to fully load - legend items appear after chart renders
+    const results = await TradingView.searchIndicator(query);
+    return {
+      success: true,
+      indicators: results.map(r => ({
+        id: r.id,
+        name: r.name,
+        author: r.author?.username || '',
+        type: r.type,
+        access: r.access,
+        version: r.version,
+      })),
+      count: results.length,
+    };
+  } catch (error) {
+    return { success: false, message: 'Error searching indicators', error: error.message };
+  }
+}
+
+async function getIndicatorListPlaywright(page) {
+  try {
     await page.waitForSelector('div[data-qa-id="legend-source-item"]', { timeout: 5000 }).catch(() => {});
 
-    // Use page.evaluate to query legend items and force toolbar visibility
-    // (TradingView hides toolbar buttons with blockHidden-* class until hover)
     const indicators = await page.evaluate(() => {
       const LEGEND_ITEM = 'div[data-qa-id="legend-source-item"]';
       const TITLE = '[data-qa-id="legend-source-title"]';
@@ -17,14 +50,12 @@ async function getIndicatorList(page) {
 
       const items = document.querySelectorAll(LEGEND_ITEM);
       return Array.from(items).map(item => {
-        // Force toolbar visible so we can inspect buttons
         const toolbar = item.querySelector(BUTTONS_WRAPPER);
         if (toolbar) {
           toolbar.classList.remove(HIDDEN_CLASS);
           toolbar.style.display = 'flex';
         }
 
-        // Force all buttons visible
         item.querySelectorAll('button').forEach(btn => {
           btn.classList.remove(HIDDEN_CLASS);
         });
@@ -72,6 +103,20 @@ async function closeIndicatorsDialog(page) {
 
 async function addIndicator(page, indicatorName = 'SMA') {
   try {
+    // Pre-flight study limit check
+    const { checkStudyCapacity } = require('../../lib/study-limits');
+    const capacity = await checkStudyCapacity(page, 1);
+    if (!capacity.canAdd) {
+      return {
+        success: false,
+        message: capacity.message,
+        limitReached: true,
+        currentStudies: capacity.currentStudies,
+        maxStudies: capacity.maxStudies,
+        plan: capacity.plan,
+      };
+    }
+
     const openResult = await openIndicatorsDialog(page);
     if (!openResult.success) return openResult;
 
@@ -126,6 +171,20 @@ async function addIndicatorFromSection(page, indicatorName, section = 'favorites
   try {
     if (!indicatorName) {
       return { success: false, message: 'Indicator name required' };
+    }
+
+    // Pre-flight study limit check
+    const { checkStudyCapacity } = require('../../lib/study-limits');
+    const capacity = await checkStudyCapacity(page, 1);
+    if (!capacity.canAdd) {
+      return {
+        success: false,
+        message: capacity.message,
+        limitReached: true,
+        currentStudies: capacity.currentStudies,
+        maxStudies: capacity.maxStudies,
+        plan: capacity.plan,
+      };
     }
 
     const openResult = await openIndicatorsDialog(page);
@@ -370,6 +429,14 @@ async function main() {
   const settingsArg = process.argv[4];
   const settings = settingsArg ? JSON.parse(settingsArg) : {};
 
+  // For 'search' action, use HTTP API (no browser needed)
+  if (action === 'search' || action === 'list') {
+    const result = await getIndicatorList(name || '');
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  // All other actions require Playwright
   const { browser, page } = await launchBrowser({ headless: false });
 
   try {
@@ -377,12 +444,11 @@ async function main() {
 
     let result;
     switch (action) {
-      case 'list': result = await getIndicatorList(page); break;
       case 'add': result = await addIndicator(page, name); break;
       case 'remove': result = await removeIndicator(page, name); break;
       case 'get-settings': result = await getIndicatorSettings(page, name); break;
       case 'set-settings': result = await setIndicatorSettings(page, name, settings); break;
-      default: result = { success: false, message: 'Usage: list|add|remove|get-settings|set-settings <name> [settings]' };
+      default: result = { success: false, message: 'Usage: search|list|add|remove|get-settings|set-settings <name> [settings]' };
     }
 
     console.log(JSON.stringify(result, null, 2));

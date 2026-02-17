@@ -49,12 +49,22 @@ function convertCookies(sourcePath, destPath) {
 
 // CLI usage
 if (require.main === module) {
-  const sourcePath = process.argv[2] || path.join(__dirname, '..', '..', 'Downloads', 'skills', 'www.tradingview.com_cookies (4).json');
-  const destPath = process.argv[3] || path.join(__dirname, '..', 'cookies.json');
+  const rootDir = path.join(__dirname, '..');
+  const destPath = process.argv[3] || path.join(rootDir, 'cookies.json');
 
-  if (!fs.existsSync(sourcePath)) {
-    console.error(`Source cookie file not found: ${sourcePath}`);
-    console.error('Usage: node convert-cookies.js [source-path] [dest-path]');
+  // Auto-detect source: explicit arg → raw GetCookies file in project root
+  let sourcePath = process.argv[2];
+  if (!sourcePath) {
+    const rawInRoot = path.join(rootDir, 'www.tradingview.com_cookies.json');
+    if (fs.existsSync(rawInRoot)) {
+      sourcePath = rawInRoot;
+    }
+  }
+
+  if (!sourcePath || !fs.existsSync(sourcePath)) {
+    console.error('No cookie file found.');
+    console.error('Either drop www.tradingview.com_cookies.json in the project root,');
+    console.error('or run: node convert-cookies.js <path-to-getcookies-export>');
     process.exit(1);
   }
 

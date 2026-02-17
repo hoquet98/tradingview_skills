@@ -1,6 +1,61 @@
 const { launchBrowser, openChart, closeBrowser } = require('../../lib/browser');
+const { fetchChartData, close } = require('../../lib/ws-client');
 
-async function setChartType(page, chartType = 'Candles') {
+// WebSocket-supported custom chart types
+const WS_CHART_TYPES = ['HeikinAshi', 'Renko', 'LineBreak', 'Kagi', 'PointAndFigure', 'Range'];
+
+/**
+ * Set chart type.
+ * - WebSocket mode: for custom types (HeikinAshi, Renko, etc.) — pass type string + symbol
+ * - Playwright mode (backward compat): pass a Playwright page as first arg
+ *
+ * @param {Page|string} pageOrType - Playwright page or chart type string
+ * @param {string} [chartTypeOrSymbol] - Chart type (Playwright) or symbol (WebSocket)
+ * @returns {Promise<{success:boolean, message:string}>}
+ */
+async function setChartType(pageOrType, chartTypeOrSymbol) {
+  if (pageOrType && typeof pageOrType.evaluate === 'function') {
+    return setChartTypePlaywright(pageOrType, chartTypeOrSymbol || 'Candles');
+  }
+  return setChartTypeWS(pageOrType || 'HeikinAshi', chartTypeOrSymbol || 'NASDAQ:AAPL');
+}
+
+async function setChartTypeWS(chartType, symbol) {
+  if (!WS_CHART_TYPES.includes(chartType)) {
+    return { success: false, message: `Chart type "${chartType}" not supported via WebSocket. Supported: ${WS_CHART_TYPES.join(', ')}` };
+  }
+  try {
+    const { getClient } = require('../../lib/ws-client');
+    const client = await getClient();
+    const chart = new client.Session.Chart();
+
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+      const timeout = setTimeout(() => {
+        if (!resolved) { resolved = true; chart.delete(); reject(new Error('Timeout')); }
+      }, 15000);
+
+      chart.onError((...err) => {
+        if (!resolved) { resolved = true; clearTimeout(timeout); chart.delete(); reject(new Error(err.join(' '))); }
+      });
+
+      chart.onUpdate(() => {
+        if (!resolved && chart.periods.length > 0) {
+          resolved = true;
+          clearTimeout(timeout);
+          chart.delete();
+          resolve({ success: true, message: `Chart type set to ${chartType}`, chartType, symbol });
+        }
+      });
+
+      chart.setMarket(symbol, { timeframe: 'D', range: 1, type: chartType });
+    });
+  } catch (error) {
+    return { success: false, message: 'Error setting chart type', error: error.message };
+  }
+}
+
+async function setChartTypePlaywright(page, chartType = 'Candles') {
   try {
     const typeBtn = await page.$('button[aria-label*="Chart type"], button[data-name="chart-type"]');
     if (typeBtn) {

@@ -1,6 +1,48 @@
-const { launchBrowser, openChart, closeBrowser } = require('../../lib/browser');
+const { fetchStrategyReport, close } = require('../../lib/ws-client');
 
-async function getStrategyReport(page, tab = 'overview') {
+/**
+ * Get strategy backtest report.
+ * - WebSocket mode (default): pass scriptId as first arg
+ * - Playwright mode (backward compat): pass a Playwright page as first arg
+ *
+ * @param {string|Page} scriptIdOrPage - Script ID (e.g. 'PUB;xxxxx') or Playwright page
+ * @param {string|Object} [symbolOrTab] - Symbol for WS mode, or tab name for Playwright mode
+ * @param {Object} [options] - { timeframe, range } for WS mode
+ * @returns {Promise<{success:boolean, message:string, report?:Object}>}
+ */
+async function getStrategyReport(scriptIdOrPage, symbolOrTab, options) {
+  if (scriptIdOrPage && typeof scriptIdOrPage.evaluate === 'function') {
+    return getStrategyReportPlaywright(scriptIdOrPage, symbolOrTab);
+  }
+  return getStrategyReportWS(scriptIdOrPage, symbolOrTab, options);
+}
+
+async function getStrategyReportWS(scriptId, symbol = 'BINANCE:BTCUSDT', options = {}) {
+  const { timeframe = 'D', range = 1000 } = options;
+
+  try {
+    const report = await fetchStrategyReport(scriptId, symbol, { timeframe, range });
+
+    const result = {
+      success: true,
+      message: 'Strategy report retrieved via WebSocket',
+      report: {
+        performance: report.performance || {},
+        trades: report.trades || [],
+        tradeCount: report.trades ? report.trades.length : 0,
+        history: report.history || {},
+        currency: report.currency || '',
+        settings: report.settings || {},
+      },
+    };
+
+    return result;
+  } catch (error) {
+    return { success: false, message: 'Error getting strategy report', error: error.message };
+  }
+}
+
+async function getStrategyReportPlaywright(page, tab = 'overview') {
   try {
     const strategyTesterBtn = await page.$('button[data-name="backtesting"]');
     if (strategyTesterBtn) {
@@ -25,7 +67,6 @@ async function getStrategyReport(page, tab = 'overview') {
 
     const report = await page.evaluate((targetTab) => {
       const stats = {};
-
       const rows = document.querySelectorAll('#bottom-area .bottom-widgetbar-content.backtesting div[class^="containerCell-"], #bottom-area div[class^="containerCell-"]');
 
       if (rows.length === 0) {
@@ -83,17 +124,26 @@ async function getStrategyReport(page, tab = 'overview') {
 }
 
 async function main() {
-  const tab = process.argv[2] || 'overview';
-  const { browser, page } = await launchBrowser({ headless: false });
+  // CLI: node index.js <scriptId> [symbol] [timeframe]
+  const scriptId = process.argv[2];
+  const symbol = process.argv[3] || 'BINANCE:BTCUSDT';
+  const timeframe = process.argv[4] || 'D';
+
+  if (!scriptId) {
+    console.log(JSON.stringify({
+      success: false,
+      message: 'Usage: node index.js <scriptId> [symbol] [timeframe]\n  Example: node index.js STD;Stochastic_RSI BINANCE:BTCUSDT D',
+    }, null, 2));
+    return;
+  }
 
   try {
-    await openChart(page);
-    const result = await getStrategyReport(page, tab);
+    const result = await getStrategyReport(scriptId, symbol, { timeframe });
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {
     console.log(JSON.stringify({ success: false, message: 'Unexpected error', error: error.message }, null, 2));
   } finally {
-    await closeBrowser(browser);
+    await close();
   }
 }
 

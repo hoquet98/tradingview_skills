@@ -13,6 +13,20 @@ const TVSelectors = {
 
 async function addStrategy(page, strategyName = 'SMA Crossover') {
   try {
+    // Pre-flight study limit check
+    const { checkStudyCapacity } = require('../../lib/study-limits');
+    const capacity = await checkStudyCapacity(page, 1);
+    if (!capacity.canAdd) {
+      return {
+        success: false,
+        message: `Cannot add strategy "${strategyName}": ${capacity.message}`,
+        limitReached: true,
+        currentStudies: capacity.currentStudies,
+        maxStudies: capacity.maxStudies,
+        plan: capacity.plan,
+      };
+    }
+
     // Step 1: Open Strategy Tester panel
     let strategyTesterBtn = await page.$(TVSelectors.STRATEGY_TESTER_TAB);
     if (!strategyTesterBtn) {

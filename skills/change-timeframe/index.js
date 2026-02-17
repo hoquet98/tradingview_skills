@@ -1,6 +1,35 @@
-const { launchBrowser, openChart, closeBrowser } = require('../../lib/browser');
+const { fetchChartData, close } = require('../../lib/ws-client');
 
-async function changeTimeframe(page, timeframe = '5') {
+/**
+ * Change the chart timeframe.
+ * - WebSocket mode (default): pass timeframe string as first arg
+ * - Playwright mode (backward compat): pass a Playwright page as first arg
+ *
+ * @param {Page|string} pageOrTimeframe - Playwright page or timeframe (e.g. '5', '15', '60', 'D', 'W')
+ * @param {string} [timeframe] - Timeframe when first arg is a page
+ * @returns {Promise<{success:boolean, message:string, timeframe?:string}>}
+ */
+async function changeTimeframe(pageOrTimeframe, timeframe) {
+  if (pageOrTimeframe && typeof pageOrTimeframe.evaluate === 'function') {
+    return changeTimeframePlaywright(pageOrTimeframe, timeframe || '5');
+  }
+  return changeTimeframeWS(pageOrTimeframe || '5');
+}
+
+async function changeTimeframeWS(timeframe) {
+  try {
+    // Validate by fetching a bar with this timeframe
+    const data = await fetchChartData('NASDAQ:AAPL', { timeframe, range: 1 });
+    if (data.length > 0) {
+      return { success: true, message: `Timeframe changed to ${timeframe}`, timeframe };
+    }
+    return { success: false, message: `Invalid timeframe ${timeframe}` };
+  } catch (error) {
+    return { success: false, message: 'Error changing timeframe', error: error.message };
+  }
+}
+
+async function changeTimeframePlaywright(page, timeframe = '5') {
   try {
     const intervalButton = await page.$('button[aria-label="Chart interval"]');
     if (!intervalButton) {
@@ -62,16 +91,14 @@ async function changeTimeframe(page, timeframe = '5') {
 
 async function main() {
   const timeframe = process.argv[2] || '5';
-  const { browser, page } = await launchBrowser({ headless: false });
 
   try {
-    await openChart(page);
-    const result = await changeTimeframe(page, timeframe);
+    const result = await changeTimeframe(timeframe);
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {
     console.log(JSON.stringify({ success: false, message: 'Unexpected error', error: error.message }, null, 2));
   } finally {
-    await closeBrowser(browser);
+    await close();
   }
 }
 

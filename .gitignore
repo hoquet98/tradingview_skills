@@ -13,5 +13,12 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Claude Code
+.claude/
+
+# Research data
+research/corpus/
+research/diffs/
+
 # Nested git history
 tradingview-api-reference/.git/
