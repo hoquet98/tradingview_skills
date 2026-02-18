@@ -1,6 +1,6 @@
 # TradingView Skills
 
-A Node.js automation library for TradingView. 35 skills that cover chart operations, strategy management, indicators, alerts, watchlists, market data, and more.
+A Node.js automation library for TradingView. 36 skills that cover chart operations, strategy management, indicators, alerts, watchlists, market data, and more.
 
 Skills run via **WebSocket** (fast, headless) or **Playwright** (browser automation) depending on the operation. Callers don't need to know which transport is used — the library picks the best one automatically.
 
@@ -52,6 +52,11 @@ await tv.openChart(page);
 await tv.addStrategy(page, 'RSI Strategy');
 const report = await tv.getStrategyReport(page, 'overview');
 await tv.closeBrowser(browser);
+
+// Deep backtesting — any date range, no browser (Premium only)
+const deep = await tv.deepBacktest('STD;RSI%1Strategy', 'BINANCE:BTCUSDT', {
+  timeframe: '1', from: '2024-01-01', to: '2025-01-01'
+});
 ```
 
 **From the command line:**
@@ -66,6 +71,7 @@ node skills/get-technical-analysis/index.js NASDAQ:AAPL
 # Browser automation
 node skills/add-strategy/index.js "RSI Strategy"
 node skills/get-strategy-report/index.js STD;RSI%1Strategy BINANCE:BTCUSDT D
+node skills/deep-backtest/index.js STD;RSI%1Strategy BINANCE:BTCUSDT 1 2024-01-01 2025-01-01
 ```
 
 ## Authentication
@@ -80,6 +86,21 @@ Credentials are resolved in this order:
 | 4 | `www.tradingview.com_cookies.json` (GetCookies raw) | WebSocket & HTTP skills |
 
 For most users: just drop the GetCookies export in the root and run `node scripts/convert-cookies.js`.
+
+### Pro Data Server
+
+The WebSocket client **auto-detects your TradingView plan** on first connection. Pro, Pro+, and Premium accounts automatically connect to TradingView's `prodata` server, which provides significantly more historical data:
+
+| Plan | Server | 1-min Bars (approx) |
+|------|--------|-------------------|
+| Free / Basic | `data.tradingview.com` | ~9,000 |
+| Pro / Pro+ / Premium | `prodata.tradingview.com` | ~23,000+ |
+
+This happens transparently — no configuration needed. The library reads the plan from your session's JWT token and picks the right server.
+
+### Deep Backtesting
+
+Premium accounts can also use **deep backtesting** via a dedicated `history-data.tradingview.com` server. This allows running strategy backtests over any date range (up to 2 million bars) without loading bars on a chart. See [deep-backtest](docs/skills-reference.md#deep-backtest).
 
 ## Skill Categories
 
@@ -104,6 +125,7 @@ These skills are fast (~100ms) and run headless. No Playwright or browser requir
 | [change-symbol](docs/skills-reference.md#change-symbol) | Change chart symbol |
 | [change-timeframe](docs/skills-reference.md#change-timeframe) | Change chart timeframe |
 | [get-strategy-report](docs/skills-reference.md#get-strategy-report) | Strategy backtest report |
+| [deep-backtest](docs/skills-reference.md#deep-backtest) | Deep backtest over any date range (Premium) |
 | [set-chart-type](docs/skills-reference.md#set-chart-type) | Set custom chart types (Heikin Ashi, Renko, etc.) |
 
 ### Playwright (browser automation)
@@ -161,7 +183,7 @@ See [docs/workflows.md](docs/workflows.md) for full details and module usage.
 
 ## Documentation
 
-- **[Skills Reference](docs/skills-reference.md)** — Complete API reference for all 35 skills with parameters, return types, and examples
+- **[Skills Reference](docs/skills-reference.md)** — Complete API reference for all 36 skills with parameters, return types, and examples
 - **[Workflows](docs/workflows.md)** — 12 runnable workflow scripts with CLI and module usage
 
 ## Project Structure
@@ -181,7 +203,7 @@ TradingView Skills/
   skills/
     get-chart-data/         # Each skill is a directory with index.js
     get-quote/
-    ...35 total
+    ...36 total
   workflows/
     market-research.js      # Search + quote + TA + metadata
     strategy-backtest.js    # Multi-symbol/timeframe backtesting

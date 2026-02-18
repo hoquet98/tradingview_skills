@@ -680,3 +680,35 @@ try {
 ```
 
 CLI scripts handle this automatically — each skill's `main()` calls `close()` in its `finally` block.
+
+### Pro Data Server
+
+The WebSocket client auto-detects your TradingView plan on first connection:
+
+| Plan | Server | Historical Data |
+|------|--------|----------------|
+| Free / Basic | `data.tradingview.com` | Standard limits (~9K bars on 1-min) |
+| Pro / Pro+ / Premium | `prodata.tradingview.com` | Extended limits (~23K+ bars on 1-min) |
+
+This is transparent — `getClient()` reads the plan from your session's JWT and picks the right server automatically. No configuration needed.
+
+### Deep Backtesting Server
+
+Premium accounts can use the dedicated `history-data.tradingview.com` server for deep backtesting — running strategy backtests over any date range (up to 2 million bars). This uses a separate `HistorySession` protocol, distinct from chart sessions.
+
+```js
+const tv = require('./index');
+
+// Deep backtest: 1 year of 1-minute data with custom params
+const result = await tv.deepBacktest('USER;abc123', 'CME_MINI:NQ1!', {
+  timeframe: '1',
+  from: '2025-02-17',
+  to: '2026-02-17',
+  params: { 'Stop Ticks': 85, 'Target Ticks': 125, 'ATR Period': 4 }
+});
+console.log(`Trades: ${result.report.tradeCount}, P&L: $${result.report.performance.all.netProfit}`);
+```
+
+### Parameter Name Resolution
+
+Both `get-strategy-report` (regular backtest) and `deep-backtest` accept `params` with human-readable names. The library automatically resolves names like `"Stop Ticks"` to internal IDs like `"in_20"`. Leading/trailing whitespace in Pine Script input names is trimmed automatically.
