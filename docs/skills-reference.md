@@ -1,6 +1,6 @@
 # Skills Reference
 
-Complete API reference for all 36 TradingView skills. Each skill can be used as a library function or run from the command line.
+Complete API reference for all TradingView skills. Each skill can be used as a library function or run from the command line.
 
 **Transport key:**
 - **WS** = WebSocket (fast, headless)
@@ -28,11 +28,15 @@ Complete API reference for all 36 TradingView skills. Each skill can be used as 
 - [change-timeframe](#change-timeframe) — Change chart timeframe
 - [set-chart-type](#set-chart-type) — Chart type, price scale, timezone, export, screenshot
 
+### Backtesting
+- [backtest](#backtest) — **Unified backtest with range presets** (recommended)
+- [getStrategyParams](#getstrategyparams) — Discover strategy parameters
+- [get-strategy-report](#get-strategy-report) — Regular backtest (raw bar count)
+- [deep-backtest](#deep-backtest) — Deep backtest over any date range (Premium)
+
 ### Strategy Management
 - [add-strategy](#add-strategy) — Add strategy from library
 - [get-active-strategy](#get-active-strategy) — List strategies on chart
-- [get-strategy-report](#get-strategy-report) — Backtest report with trades
-- [deep-backtest](#deep-backtest) — Deep backtest over any date range (Premium)
 - [open-strategy-settings](#open-strategy-settings) — Read strategy parameters
 - [create-strategy](#create-strategy) — Create new Pine strategy
 - [save-strategy](#save-strategy) — Save strategy
@@ -503,6 +507,200 @@ node skills/set-chart-type/index.js screenshot '{"path": "./chart.png"}'
 
 ---
 
+## Backtesting
+
+### backtest
+
+**The recommended way to run backtests.** Auto-routes between regular and deep backtest based on the range you provide. Handles type coercion (strings like `"145"` are auto-converted to numbers) and accepts any parameter key format.
+
+**Transport:** WS (auto-selects regular or deep backtest server)
+
+#### Function Signature
+
+```js
+backtest(scriptId, symbol?, options?)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `scriptId` | `string` | — | Script ID (e.g. `'STD;RSI%1Strategy'`, `'USER;abc123'`) |
+| `symbol` | `string` | `'BINANCE:BTCUSDT'` | Market symbol |
+| `options.timeframe` | `string` | `'D'` | `'1','5','15','30','45','60','120','240','D','W','M'` |
+| `options.range` | `string \| number \| Object` | `'chart'` | Range preset (see below) |
+| `options.params` | `Object` | — | Strategy parameter overrides |
+
+#### Range Presets
+
+| Preset | Description | Routing |
+|--------|-------------|---------|
+| `'chart'` | Matches TradingView UI default (plan-based: Free=5K, Pro=10K, Premium=20K bars) | Regular |
+| `'7d'` | Last 7 calendar days | Regular |
+| `'30d'` | Last 30 calendar days | Regular |
+| `'90d'` | Last 90 calendar days | Regular |
+| `'365d'` | Last 365 calendar days | Regular or Deep* |
+| `'max'` | All available history | Deep (Premium) |
+| `{ from: '2025-01-01', to: '2025-06-01' }` | Custom date range | Deep (Premium) |
+| `1000` | Raw bar count (backward compat) | Regular |
+
+*Day presets automatically switch to deep backtest if the calculated bar count exceeds the plan's limit.
+
+#### Returns
+
+```json
+{
+  "success": true,
+  "message": "Backtest completed: 89 trades",
+  "mode": "regular",
+  "range": { "bars": 20000 },
+  "report": {
+    "performance": {
+      "all": { "netProfit": 3845, "percentProfitable": 0.685, "profitFactor": 1.47, "totalTrades": 89 },
+      "maxStrategyDrawDown": 1825,
+      "sharpeRatio": 0.25
+    },
+    "trades": [],
+    "tradeCount": 89
+  }
+}
+```
+
+#### CLI
+
+```bash
+# Default: range from chart
+node skills/backtest/index.js STD;RSI%1Strategy BINANCE:BTCUSDT D
+
+# Last 30 days on 1-min
+node skills/backtest/index.js USER;abc123 CME_MINI:NQ1! 1 30d
+
+# Custom date range (routes to deep backtest)
+node skills/backtest/index.js USER;abc123 CME_MINI:NQ1! 1 '{"from":"2026-01-25","to":"2026-02-17"}'
+
+# With custom parameters
+node skills/backtest/index.js USER;abc123 CME_MINI:NQ1! 1 chart '{"MA Period":145,"ATR Factor":1.93}'
+
+# Raw bar count (backward compat)
+node skills/backtest/index.js STD;RSI%1Strategy BINANCE:BTCUSDT D 500
+```
+
+#### Parameter Handling
+
+Parameters are auto-coerced to match TradingView's expected types:
+
+| Input Type | Accepts | Example |
+|------------|---------|---------|
+| `integer` | number, numeric string | `145` or `"145"` → `145` |
+| `float` | number, numeric string | `1.93` or `"1.93"` → `1.93` |
+| `bool` | boolean, `"true"`/`"false"`, `0`/`1` | `true` or `"true"` → `true` |
+| `text` | any (converted to string) | `"Ema"` → `"Ema"` |
+
+Parameter keys can be any format: human-readable name (`"MA Period"`), inline name (`"MA_Period"`), or internal ID (`"in_0"`).
+
+If a parameter name is not found, the error message lists all available parameters with their types.
+
+---
+
+### getStrategyParams
+
+Discover all parameters for a strategy before running a backtest. Returns parameter IDs, names, types, defaults, and allowed values.
+
+**Transport:** HTTP
+
+#### Function Signature
+
+```js
+getStrategyParams(scriptId)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `scriptId` | `string` | Script ID (e.g. `'STD;RSI%1Strategy'`, `'USER;abc123'`) |
+
+#### Returns
+
+```json
+[
+  { "id": "in_0", "name": "Length", "inline": "Length", "type": "integer", "defaultValue": 14, "isHidden": false },
+  { "id": "in_1", "name": "Oversold", "inline": "Oversold", "type": "integer", "defaultValue": 30, "isHidden": false },
+  { "id": "in_2", "name": "Overbought", "inline": "Overbought", "type": "integer", "defaultValue": 70, "isHidden": false },
+  { "id": "in_7", "name": "Default entry/order Qty Type", "inline": "DefaultentryorderQtyType", "type": "text", "defaultValue": "fixed", "options": ["fixed", "percent_of_equity", "cash", "contracts"], "isHidden": false }
+]
+```
+
+#### Usage Pattern
+
+```js
+const tv = require('./index');
+
+// 1. Discover parameters
+const params = await tv.getStrategyParams('USER;abc123');
+params.forEach(p => console.log(`${p.name} (${p.type}): default=${p.defaultValue}`));
+
+// 2. Use the parameter names in a backtest
+const result = await tv.backtest('USER;abc123', 'CME_MINI:NQ1!', {
+  timeframe: '1',
+  range: 'chart',
+  params: { 'MA Period': 145, 'ATR Factor': 1.93 }
+});
+```
+
+---
+
+### get-strategy-report
+
+Get a strategy's backtest report with performance metrics and trade list. Uses a raw bar count for the range.
+
+For most use cases, prefer [backtest](#backtest) which provides range presets and type coercion.
+
+**Transport:** Hybrid (WS default)
+
+#### Function Signature
+
+```js
+// WebSocket mode
+getStrategyReport(scriptId, symbol, options?)
+
+// Playwright mode
+getStrategyReport(page, tab?)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `scriptId` | `string` | — | Script ID (e.g. `'STD;RSI%1Strategy'`, `'PUB;xxxxx'`) |
+| `symbol` | `string` | — | Market symbol |
+| `options.timeframe` | `string` | `'D'` | Timeframe |
+| `options.range` | `number` | `1000` | Number of bars |
+| `options.params` | `Object` | — | Strategy parameter overrides `{ "paramName": value }` |
+| `page` | `Page` | — | Playwright Page (PW mode) |
+| `tab` | `string` | `'overview'` | `'overview','performance','tradeAnalysis','riskRatios','listOfTrades'` |
+
+---
+
+### deep-backtest
+
+Run a deep backtest over a custom date range using TradingView's history-data server. Supports up to 2 million bars. **Premium plan required.**
+
+For most use cases, prefer [backtest](#backtest) with a date range or `"max"` preset which auto-routes here.
+
+**Transport:** WS (dedicated `history-data.tradingview.com` server)
+
+#### Function Signature
+
+```js
+deepBacktest(scriptId, symbol, options?)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `scriptId` | `string` | — | Script ID |
+| `symbol` | `string` | `'BINANCE:BTCUSDT'` | Market symbol |
+| `options.timeframe` | `string` | `'D'` | Timeframe |
+| `options.from` | `string \| number` | `2010-01-01` | Start date (`'YYYY-MM-DD'` or unix timestamp) |
+| `options.to` | `string \| number` | now | End date (`'YYYY-MM-DD'` or unix timestamp) |
+| `options.params` | `Object` | — | Strategy parameter overrides |
+
+---
+
 ## Strategy Management
 
 ### add-strategy
@@ -571,133 +769,6 @@ getActiveStrategy(page)
 ```bash
 node skills/get-active-strategy/index.js
 ```
-
----
-
-### get-strategy-report
-
-Get a strategy's backtest report with performance metrics and trade list.
-
-**Transport:** Hybrid (WS default)
-
-#### Function Signature
-
-```js
-// WebSocket mode
-getStrategyReport(scriptId, symbol, options?)
-
-// Playwright mode
-getStrategyReport(page, tab?)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `scriptId` | `string` | — | Script ID (e.g. `'STD;RSI%1Strategy'`, `'PUB;xxxxx'`) |
-| `symbol` | `string` | — | Market symbol |
-| `options.timeframe` | `string` | `'D'` | Timeframe |
-| `options.range` | `number` | `1000` | Candle range for backtest |
-| `options.params` | `Object` | — | Strategy parameter overrides `{ "paramName": value }` |
-| `page` | `Page` | — | Playwright Page (PW mode) |
-| `tab` | `string` | `'overview'` | `'overview','performance','tradeAnalysis','riskRatios','listOfTrades'` |
-
-#### Returns (WS mode)
-
-```json
-{
-  "success": true,
-  "message": "Strategy report for STD;RSI%1Strategy on BINANCE:BTCUSDT",
-  "report": {
-    "performance": { "netProfit": 5234.50, "percentProfitable": 62.5, "profitFactor": 1.85, "maxDrawdown": -1200, "totalTrades": 48 },
-    "trades": [ { "entry": {}, "exit": {}, "profit": 150 } ],
-    "tradeCount": 48
-  }
-}
-```
-
-#### CLI
-
-```bash
-# WebSocket mode
-node skills/get-strategy-report/index.js STD;RSI%1Strategy BINANCE:BTCUSDT D
-
-# Playwright mode (launches browser)
-node skills/get-strategy-report/index.js overview
-```
-
----
-
-### deep-backtest
-
-Run a deep backtest over a custom date range using TradingView's history-data server. Supports up to 2 million bars and 1 million trades. **Premium plan required.**
-
-Unlike regular backtesting (which uses chart-loaded bars), deep backtesting runs the strategy on all available historical data within the specified date range — no chart session needed.
-
-**Transport:** WS (dedicated `history-data.tradingview.com` server)
-
-#### Function Signature
-
-```js
-deepBacktest(scriptId, symbol, options?)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `scriptId` | `string` | — | Script ID (e.g. `'STD;RSI%1Strategy'`, `'USER;abc123'`) |
-| `symbol` | `string` | `'BINANCE:BTCUSDT'` | Market symbol |
-| `options.timeframe` | `string` | `'D'` | Timeframe |
-| `options.from` | `string \| number` | `2010-01-01` | Start date (`'YYYY-MM-DD'` or unix timestamp) |
-| `options.to` | `string \| number` | now | End date (`'YYYY-MM-DD'` or unix timestamp, end-of-day) |
-| `options.params` | `Object` | — | Strategy parameter overrides `{ "paramName": value }` |
-
-#### Returns
-
-```json
-{
-  "success": true,
-  "message": "Deep backtest completed: 625 trades",
-  "report": {
-    "performance": {
-      "all": { "netProfit": 21865, "percentProfitable": 0.6768, "profitFactor": 1.406, "totalTrades": 625, "commissionPaid": 6250 },
-      "maxStrategyDrawDown": 5280,
-      "sharpeRatio": 0.001
-    },
-    "trades": [ { "entry": { "name": "...", "type": "long", "value": 21800, "time": 1739894220000 }, "exit": {}, "profit": {}, "quantity": 1 } ],
-    "tradeCount": 625,
-    "currency": "USD",
-    "settings": { "dateRange": { "backtest": { "from": 1739750400000, "to": 1771286400000 }, "trade": { "from": 1739894220000, "to": 1771286400000 } } }
-  }
-}
-```
-
-#### CLI
-
-```bash
-node skills/deep-backtest/index.js STD;RSI%1Strategy BINANCE:BTCUSDT D 2024-01-01 2025-01-01
-node skills/deep-backtest/index.js USER;abc123 CME_MINI:NQ1! 1 2025-02-17 2026-02-17
-node skills/deep-backtest/index.js STD;RSI%1Strategy BINANCE:BTCUSDT 5 2024-06-01 2024-12-31 '{"Length":21}'
-```
-
-#### Parameter Names
-
-Parameter names are matched by their **human-readable names** (e.g. `"Stop Ticks"`, `"ATR Period"`), not internal IDs (`in_0`, `in_1`). Leading/trailing whitespace in Pine Script input names is automatically trimmed — so `"Friday"` matches `"  Friday"`.
-
-Use `get-indicator-details` or `get-strategy-params` workflow to discover available parameter names and defaults.
-
-#### Verified Accuracy
-
-Tested against TradingView's deep backtesting UI (DEMA ATR Strategy, CME_MINI:NQ1!, 1-min, Feb 17 2025 - Feb 17 2026):
-
-| Metric | TradingView | This Skill |
-|--------|-------------|------------|
-| Total P&L | $21,420 | $21,865 |
-| Max Drawdown | $5,280 | $5,280 |
-| Total Trades | 629 | 625 |
-| Win Rate | 67.57% | 67.68% |
-| Profit Factor | 1.391 | 1.406 |
-
-Small differences are due to trading fees configuration and the exact `to` timestamp boundary.
-
-> **Note:** Deep backtest results may differ slightly from regular backtesting. Recursive indicators (EMA, RMA, ATR) start calculating from the beginning of the requested date range, which can produce cascading differences compared to chart-based backtesting where indicators start from a different initial bar.
 
 ---
 

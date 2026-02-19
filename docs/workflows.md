@@ -89,86 +89,126 @@ node skills/get-market-info/index.js NASDAQ:AAPL
 
 ## Strategy Backtesting
 
-**Script:** `workflows/strategy-backtest.js`
+Use `backtest()` for all backtesting. It auto-routes between regular and deep backtest based on the range preset.
 
-```bash
-node workflows/strategy-backtest.js "STD;RSI%1Strategy" BINANCE:BTCUSDT D
-node workflows/strategy-backtest.js "STD;RSI%1Strategy" BINANCE:BTCUSDT,BINANCE:ETHUSDT,NASDAQ:AAPL D
-node workflows/strategy-backtest.js "STD;RSI%1Strategy" BINANCE:BTCUSDT D,240,60
-```
-
-**Returns:** Strategy details, performance metrics per symbol/timeframe, comparison summary (best by profit factor, best by win rate).
-
-### As a module
+### Quick start
 
 ```js
 const tv = require('./index');
+const { close } = require('./lib/ws-client');
 
-// Get strategy report for RSI Strategy on BTC daily
-const report = await tv.getStrategyReport('STD;RSI%1Strategy', 'BINANCE:BTCUSDT', {
+// Default: range from chart (matches what you see in TradingView UI)
+const result = await tv.backtest('STD;RSI%1Strategy', 'BINANCE:BTCUSDT', {
   timeframe: 'D',
-  range: 1000,
+  range: 'chart',
 });
 
-console.log(`Net Profit: ${report.report.performance.netProfit}`);
-console.log(`Win Rate: ${report.report.performance.percentProfitable}%`);
-console.log(`Total Trades: ${report.report.tradeCount}`);
+console.log(`Net Profit: ${result.report.performance.all.netProfit}`);
+console.log(`Trades: ${result.report.tradeCount}`);
+console.log(`Mode: ${result.mode}`); // "regular" or "deep"
+
+await close();
 ```
 
-### Full strategy workflow with Playwright
+### Range presets
 
 ```js
 const tv = require('./index');
+const { close } = require('./lib/ws-client');
 
-const { browser, page } = await tv.launchBrowser({ headless: false });
-await tv.openChart(page);
+const scriptId = 'USER;abc123';
+const symbol = 'CME_MINI:NQ1!';
 
-// 1. Set up the chart
-await tv.changeSymbol(page, 'BINANCE:BTCUSDT');
-await tv.changeTimeframe(page, 'D');
+// Range from chart (matches TradingView UI: Free=5K, Pro=10K, Premium=20K bars)
+await tv.backtest(scriptId, symbol, { timeframe: '1', range: 'chart' });
 
-// 2. Add a strategy
-await tv.addStrategy(page, 'RSI Strategy');
+// Last 30 days
+await tv.backtest(scriptId, symbol, { timeframe: '1', range: '30d' });
 
-// 3. Read its current settings
-const settings = await tv.openStrategySettings(page, 'RSI Strategy');
-console.log('Current settings:', settings.settings);
+// Last 90 days
+await tv.backtest(scriptId, symbol, { timeframe: '1', range: '90d' });
 
-// 4. Get the backtest report
-const overview = await tv.getStrategyReport(page, 'overview');
-console.log('Overview:', overview);
+// All available history (Premium only — uses deep backtest automatically)
+await tv.backtest(scriptId, symbol, { timeframe: '1', range: 'max' });
 
-const trades = await tv.getStrategyReport(page, 'listOfTrades');
-console.log('Trades:', trades);
+// Custom date range (Premium only — uses deep backtest automatically)
+await tv.backtest(scriptId, symbol, {
+  timeframe: '1',
+  range: { from: '2026-01-25', to: '2026-02-17' },
+});
 
-// 5. Clean up
-await tv.removeStrategy(page, 'RSI Strategy');
-await tv.closeBrowser(browser);
+await close();
 ```
 
-### Compare strategies across symbols
+### With custom parameters
 
 ```js
 const tv = require('./index');
+const { close } = require('./lib/ws-client');
+
+// Step 1: Discover parameters
+const params = await tv.getStrategyParams('USER;abc123');
+params.forEach(p => console.log(`${p.name} (${p.type}): default=${p.defaultValue}`));
+
+// Step 2: Run backtest with overrides
+// String values are auto-coerced — "145" becomes 145 for integer inputs
+const result = await tv.backtest('USER;abc123', 'CME_MINI:NQ1!', {
+  timeframe: '1',
+  range: 'chart',
+  params: {
+    'MA Period': 145,       // or "145" — both work
+    'ATR Factor': 1.93,
+    'ATR Period': 4,
+    'DEMA Period': 3,
+    'Stop Ticks': 85,
+    'Target Ticks': 125,
+    'Allow Shorts': false,
+  },
+});
+
+const perf = result.report.performance;
+console.log(`Net Profit: $${perf.all.netProfit}`);
+console.log(`Win Rate: ${(perf.all.percentProfitable * 100).toFixed(1)}%`);
+console.log(`Profit Factor: ${perf.all.profitFactor.toFixed(3)}`);
+console.log(`Max Drawdown: $${perf.maxStrategyDrawDown}`);
+
+await close();
+```
+
+### Compare across symbols
+
+```js
+const tv = require('./index');
+const { close } = require('./lib/ws-client');
 
 const strategy = 'STD;RSI%1Strategy';
 const symbols = ['BINANCE:BTCUSDT', 'BINANCE:ETHUSDT', 'NASDAQ:AAPL'];
 
 for (const symbol of symbols) {
-  try {
-    const report = await tv.getStrategyReport(strategy, symbol, { timeframe: 'D', range: 500 });
-    console.log(`${symbol}: ${report.report.tradeCount} trades, PF: ${report.report.performance.profitFactor}`);
-  } catch (err) {
-    console.log(`${symbol}: ${err.message}`);
+  const r = await tv.backtest(strategy, symbol, { timeframe: 'D', range: '90d' });
+  if (r.success) {
+    const p = r.report.performance.all;
+    console.log(`${symbol}: ${p.totalTrades} trades, PF: ${p.profitFactor?.toFixed(2)}, Win: ${(p.percentProfitable * 100).toFixed(1)}%`);
   }
 }
+
+await close();
 ```
 
-### CLI version
+### CLI
 
 ```bash
-node skills/get-strategy-report/index.js STD;RSI%1Strategy BINANCE:BTCUSDT D
-node skills/get-strategy-report/index.js STD;RSI%1Strategy NASDAQ:AAPL D
+# Default range from chart
+node skills/backtest/index.js STD;RSI%1Strategy BINANCE:BTCUSDT D
+
+# Last 30 days on 1-min
+node skills/backtest/index.js USER;abc123 CME_MINI:NQ1! 1 30d
+
+# Custom date range
+node skills/backtest/index.js USER;abc123 CME_MINI:NQ1! 1 '{"from":"2026-01-25","to":"2026-02-17"}'
+
+# With parameters
+node skills/backtest/index.js USER;abc123 CME_MINI:NQ1! 1 chart '{"MA Period":145,"ATR Factor":1.93}'
 ```
 
 ---
@@ -694,21 +734,28 @@ This is transparent — `getClient()` reads the plan from your session's JWT and
 
 ### Deep Backtesting Server
 
-Premium accounts can use the dedicated `history-data.tradingview.com` server for deep backtesting — running strategy backtests over any date range (up to 2 million bars). This uses a separate `HistorySession` protocol, distinct from chart sessions.
+Premium accounts can use the dedicated `history-data.tradingview.com` server for deep backtesting — running strategy backtests over any date range (up to 2 million bars). The unified `backtest()` function auto-routes to deep backtest when you use `range: "max"` or a date range object.
 
 ```js
 const tv = require('./index');
+const { close } = require('./lib/ws-client');
 
-// Deep backtest: 1 year of 1-minute data with custom params
-const result = await tv.deepBacktest('USER;abc123', 'CME_MINI:NQ1!', {
-  timeframe: '1',
-  from: '2025-02-17',
-  to: '2026-02-17',
-  params: { 'Stop Ticks': 85, 'Target Ticks': 125, 'ATR Period': 4 }
-});
-console.log(`Trades: ${result.report.tradeCount}, P&L: $${result.report.performance.all.netProfit}`);
+// These automatically use deep backtest:
+await tv.backtest('USER;abc123', 'CME_MINI:NQ1!', { timeframe: '1', range: 'max' });
+await tv.backtest('USER;abc123', 'CME_MINI:NQ1!', { timeframe: '1', range: { from: '2025-02-17', to: '2026-02-17' } });
+
+await close();
 ```
 
-### Parameter Name Resolution
+### Parameter Type Coercion
 
-Both `get-strategy-report` (regular backtest) and `deep-backtest` accept `params` with human-readable names. The library automatically resolves names like `"Stop Ticks"` to internal IDs like `"in_20"`. Leading/trailing whitespace in Pine Script input names is trimmed automatically.
+All backtesting functions (`backtest`, `getStrategyReport`, `deepBacktest`) auto-coerce parameter values to match TradingView's expected types. String `"145"` is converted to integer `145`, `"true"` to boolean `true`, etc. If a value cannot be coerced, a friendly error is thrown listing all available parameters.
+
+### Parameter Key Resolution
+
+Parameters can be passed using any key format:
+- Human-readable name: `"MA Period"` (with auto-trimming of whitespace)
+- Inline name: `"MA_Period"`
+- Internal ID: `"in_0"`
+
+Use `getStrategyParams(scriptId)` to discover all available parameters before running a backtest.

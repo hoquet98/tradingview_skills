@@ -53,6 +53,8 @@ const { managePinePermissions } = require('./skills/manage-pine-permissions');
 const { getUserInfo } = require('./skills/get-user-info');
 const { getChartDrawings } = require('./skills/get-chart-drawings');
 const { deepBacktest } = require('./skills/deep-backtest');
+const { backtest } = require('./skills/backtest');
+const { getStrategyParams } = require('./lib/params');
 
 // Study Limits
 const { getUserStudyLimits, countStudiesOnChart, checkStudyCapacity } = require('./lib/study-limits');
@@ -127,6 +129,8 @@ module.exports = {
   getUserInfo,
   getChartDrawings,
   deepBacktest,
+  backtest,
+  getStrategyParams,
 
   // Study Limits
   getUserStudyLimits,
