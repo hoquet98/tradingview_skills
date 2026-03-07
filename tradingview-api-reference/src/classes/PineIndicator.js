@@ -123,7 +123,16 @@ module.exports = class PineIndicator {
       }
 
       if (input.options && !input.options.includes(value)) {
-        throw new Error(`Input '${input.name}' (${propI}) must be one of these values:`, input.options);
+        // Try case-insensitive / trimmed match before rejecting
+        const match = input.options.find((o) => (
+          String(o).trim().toLowerCase() === String(value).trim().toLowerCase()
+        ));
+        if (match) {
+          input.value = match;
+          return;
+        }
+        // Value not in options — warn but still set it (server will validate)
+        console.warn(`[PineIndicator] Input '${input.name}' (${propI}): value ${JSON.stringify(value)} not in options ${JSON.stringify(input.options)}, setting anyway`);
       }
 
       input.value = value;

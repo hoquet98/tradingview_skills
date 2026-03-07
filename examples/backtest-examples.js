@@ -150,8 +150,8 @@ async function example6() {
 // --- Main ---
 (async () => {
   const selected = process.argv[2];
-  const examples = { 1: example1, 2: example2, 3: example3, 4: example4, 5: example5, 6: example6 };
-
+  // const examples = { 1: example1, 2: example2, 3: example3, 4: example4, 5: example5, 6: example6 };
+  const examples = { 1: example1 };
   try {
     if (selected && examples[selected]) {
       await examples[selected]();
