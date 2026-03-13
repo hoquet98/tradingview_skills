@@ -22,8 +22,10 @@ async function getAlertLog(page, days = 1) {
     const openResult = await openAlertsPanel(page);
     if (!openResult.success) return openResult;
 
+    await page.waitForTimeout(500);
+
     // Switch to the Log tab
-    const logTab = await page.$(TVSelectors.LOG_TAB);
+    const logTab = await page.waitForSelector(TVSelectors.LOG_TAB, { timeout: 5000 }).catch(() => null);
     if (!logTab) {
       return { success: false, message: 'Log tab not found in alerts panel' };
     }
@@ -54,7 +56,7 @@ async function getAlertLog(page, days = 1) {
 
       const batch = await page.evaluate(() => {
         const LOG_ITEM = '[data-name="alert-log-item"]';
-        const DATE_LABEL = '[class*="label-cU4vU9Kj"], [class*="label-Z31nwDQw"]';
+        const DATE_LABEL = '[class*="label-cU4vU9Kj"], [class*="label-e9Wl_soe"]';
 
         // Build a map of date labels and their positions to associate entries with dates
         const labels = document.querySelectorAll(DATE_LABEL);
@@ -65,8 +67,14 @@ async function getAlertLog(page, days = 1) {
 
         const items = document.querySelectorAll(LOG_ITEM);
         return Array.from(items).map(item => {
+          // Name element (separate from message in webhook-style alerts)
           const name = item.querySelector('[class*="name-"]')?.textContent?.trim() || '';
+          // Message — could be webhook payload (key=value lines) or strategy order text
           const message = item.querySelector('[class*="message-"]')?.textContent?.trim() || '';
+          // Webhook delivery status
+          const webhookStatusEl = item.querySelector('[data-qa-id="alert-log-webhook-status"]');
+          const webhookStatus = webhookStatusEl?.textContent?.trim() || '';
+
           const attrs = item.querySelectorAll('[class*="attribute-"]');
           const ticker = attrs[0]?.textContent?.trim() || '';
           const time = attrs[1]?.textContent?.trim() || '';
@@ -81,8 +89,8 @@ async function getAlertLog(page, days = 1) {
             }
           }
 
-          return { name, message, ticker, time, dateLabel };
-        }).filter(entry => entry.name);
+          return { name, message, webhookStatus, ticker, time, dateLabel };
+        }).filter(entry => entry.name || entry.message);
       });
 
       const prevSize = collected.length;
@@ -98,9 +106,25 @@ async function getAlertLog(page, days = 1) {
           break;
         }
 
+        // Parse message into key-value pairs if it's webhook payload format
+        const messageData = {};
+        if (entry.message.includes('=')) {
+          const lines = entry.message.split(/[;\n]+/).map(l => l.trim()).filter(Boolean);
+          for (const line of lines) {
+            const eqIdx = line.indexOf('=');
+            if (eqIdx > 0) {
+              const key = line.substring(0, eqIdx).trim();
+              const val = line.substring(eqIdx + 1).trim();
+              messageData[key] = val;
+            }
+          }
+        }
+
         collected.push({
           name: entry.name,
           message: entry.message,
+          messageData,
+          webhookStatus: entry.webhookStatus,
           ticker: entry.ticker,
           time: entry.time,
           date: entry.dateLabel,
@@ -120,8 +144,7 @@ async function getAlertLog(page, days = 1) {
       // Scroll down in the log container
       const scrolled = await page.evaluate(() => {
         // The log scrollable container
-        const container = document.querySelector('[class*="scrollContainer-RT_yiIRf"]')
-          || document.querySelector('#id_alert-widget-tabs-slots_tabpanel_log [class*="scrollContainer"]');
+        const container = document.querySelector('#id_alert-widget-tabs-slots_tabpanel_log [class*="scrollContainer-"]');
         if (!container) {
           // Fallback: find any scrollable element in the log panel
           const panel = document.querySelector('#id_alert-widget-tabs-slots_tabpanel_log');

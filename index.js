@@ -34,7 +34,7 @@ const { getIndicatorList, getIndicatorsFromSection, addIndicator, removeIndicato
 
 // Alerts
 const { createAlert } = require('./skills/create-alert');
-const { viewAlert, listAlerts, editAlert, deleteAlert } = require('./skills/view-alert');
+const { viewAlert, listAlerts, getAlertSettings, editAlert, deleteAlert, pauseAlert, resumeAlert, pauseAllAlerts, resumeAllAlerts } = require('./skills/view-alert');
 const { getAlertLog } = require('./skills/get-alert-log');
 
 // Drawings & Scripts
@@ -106,8 +106,13 @@ module.exports = {
   createAlert,
   viewAlert,
   listAlerts,
+  getAlertSettings,
   editAlert,
   deleteAlert,
+  pauseAlert,
+  resumeAlert,
+  pauseAllAlerts,
+  resumeAllAlerts,
   getAlertLog,
 
   // Drawings & Scripts

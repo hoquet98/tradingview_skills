@@ -271,7 +271,7 @@ module.exports = class Client {
       this.#handleError('WebSocket error:', err.message);
     });
 
-    this.#ws.on('message', (data) => this.#parsePacket(data));
+    this.#ws.on('message', (data) => this.#parsePacket(typeof data === 'string' ? data : data.toString()));
   }
 
   /** @type {ClientBridge} */

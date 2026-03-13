@@ -3,6 +3,8 @@ node_modules/
 
 # Sensitive data
 cookies.json
+www.tradingview.com_cookies.json
+www.tradingview.com_cookies*.json
 .env
 
 # OS files
