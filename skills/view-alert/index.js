@@ -7,11 +7,13 @@ const TVSelectors = {
   // Tabs inside the alerts widget
   ALERTS_TAB: 'button[role="tab"]#list',
   LOG_TAB: 'button[role="tab"]#log',
-  // Alert list items — no alert-item-name exists; description is the primary text
+  // Alert list items
   ALERT_ITEM: '[class*="itemBody-"]',
+  ALERT_NAME: '[data-name="alert-item-name"]',
   ALERT_DESCRIPTION: '[data-name="alert-item-description"]',
   ALERT_TICKER: '[data-name="alert-item-ticker"]',
   ALERT_STATUS: '[data-name="alert-item-status"]',
+  ALERT_TIME: '[data-name="alert-item-time"]',
   // Alert action buttons (overlay on hover)
   ALERT_STOP: '[data-name="alert-stop-button"]',
   ALERT_RESTART: '[data-name="alert-restart-button"]',
@@ -81,28 +83,31 @@ async function listAlerts(page) {
         // Find all alert item containers
         const items = document.querySelectorAll(sel.ALERT_ITEM);
         return Array.from(items).map(item => {
+          const name = item.querySelector(sel.ALERT_NAME)?.textContent?.trim() || '';
           const description = item.querySelector(sel.ALERT_DESCRIPTION)?.textContent?.trim() || '';
           const ticker = item.querySelector(sel.ALERT_TICKER)?.textContent?.trim() || '';
           const statusEl = item.querySelector(sel.ALERT_STATUS);
           const status = statusEl?.textContent?.trim() || '';
           const isActive = statusEl?.classList?.toString()?.includes('active') || false;
+          const lastTriggered = item.querySelector(sel.ALERT_TIME)?.textContent?.trim() || '';
           const hasStop = !!item.querySelector(sel.ALERT_STOP);
           const hasRestart = !!item.querySelector(sel.ALERT_RESTART);
-          return { description, ticker, status, isActive, canPause: hasStop, canRestart: hasRestart };
-        }).filter(a => a.description);
+          return { name, description, ticker, status, isActive, lastTriggered, canPause: hasStop, canRestart: hasRestart };
+        }).filter(a => a.name || a.description);
       }, TVSelectors);
 
       const prevSize = collected.length;
       for (const alert of visibleAlerts) {
-        const key = `${alert.description}|${alert.ticker}`;
+        const key = `${alert.name}|${alert.ticker}`;
         if (!seenKeys.has(key)) {
           seenKeys.add(key);
           collected.push({
-            name: extractAlertName(alert.description),
+            name: alert.name || extractAlertName(alert.description),
             description: alert.description,
             ticker: alert.ticker,
             status: alert.status,
             isActive: alert.isActive,
+            lastTriggered: alert.lastTriggered,
             canPause: alert.canPause,
             canRestart: alert.canRestart,
           });
@@ -283,9 +288,11 @@ async function findAndClickAlertButton(page, alertName, buttonSelector, buttonLa
     let targetDesc = '';
 
     for (const item of items) {
+      const nameEl = await item.$(TVSelectors.ALERT_NAME);
+      const name = nameEl ? await nameEl.textContent() : '';
       const descEl = await item.$(TVSelectors.ALERT_DESCRIPTION);
       const desc = descEl ? await descEl.textContent() : '';
-      if (!alertName || desc.toLowerCase().includes(alertName.toLowerCase())) {
+      if (!alertName || name.toLowerCase().includes(alertName.toLowerCase()) || desc.toLowerCase().includes(alertName.toLowerCase())) {
         targetItem = item;
         targetDesc = desc.trim();
         break;
@@ -416,9 +423,11 @@ async function getAlertSettings(page, alertName = null) {
     let targetDesc = '';
 
     for (const item of items) {
+      const nameEl = await item.$(TVSelectors.ALERT_NAME);
+      const name = nameEl ? await nameEl.textContent() : '';
       const descEl = await item.$(TVSelectors.ALERT_DESCRIPTION);
       const desc = descEl ? await descEl.textContent() : '';
-      if (!alertName || desc.toLowerCase().includes(alertName.toLowerCase())) {
+      if (!alertName || name.toLowerCase().includes(alertName.toLowerCase()) || desc.toLowerCase().includes(alertName.toLowerCase())) {
         targetItem = item;
         targetDesc = desc.trim();
         break;
